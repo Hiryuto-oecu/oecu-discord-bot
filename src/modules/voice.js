@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   MessageFlags,
+  PermissionFlagsBits,
   SlashCommandBuilder,
 } = require('discord.js');
 const {
@@ -14,6 +15,8 @@ const {
   VoiceConnectionStatus,
   entersState,
 } = require('@discordjs/voice');
+
+const VOICE_READY_TIMEOUT_MS = 10_000;
 
 
 function getMemberVoiceChannel(interaction) {
@@ -42,6 +45,22 @@ function ensurePlayer(client, guildId) {
   return client.voicePlayers.get(guildId);
 }
 
+async function getBotVoicePermissionIssue(interaction, channel) {
+  const me = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+  const permissions = channel.permissionsFor(me);
+  if (!permissions) {
+    return 'ボイスチャンネルの権限を確認できませんでした。';
+  }
+
+  const missing = [];
+  if (!permissions.has(PermissionFlagsBits.ViewChannel)) missing.push('チャンネルを見る');
+  if (!permissions.has(PermissionFlagsBits.Connect)) missing.push('接続');
+  if (!permissions.has(PermissionFlagsBits.Speak)) missing.push('発言');
+
+  if (!missing.length) return null;
+  return `Bot に \`${channel.name}\` の権限が不足しています: ${missing.join(' / ')}`;
+}
+
 async function connectOrMove(interaction, channel) {
   let connection = getVoiceConnection(interaction.guild.id);
   if (!connection) {
@@ -61,7 +80,7 @@ async function connectOrMove(interaction, channel) {
   }
 
   try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    await entersState(connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
     return connection;
   } catch (error) {
     connection.destroy();
@@ -99,22 +118,16 @@ async function replyEphemeral(interaction, content) {
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
-async function deferEphemeral(interaction) {
-  if (!interaction.deferred && !interaction.replied) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  }
-}
-
-async function sendDeferredResult(interaction, content) {
+async function replyOrEditEphemeral(interaction, content) {
   if (interaction.deferred) {
     await interaction.editReply({ content });
     return;
   }
   if (interaction.replied) {
-    await interaction.followUp({ content });
+    await interaction.editReply({ content });
     return;
   }
-  await interaction.reply({ content });
+  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
 module.exports = {
@@ -132,13 +145,25 @@ module.exports = {
         }
 
         try {
-          await deferEphemeral(interaction);
           const before = getVoiceConnection(interaction.guild.id);
+          await replyOrEditEphemeral(
+            interaction,
+            before
+              ? `\`${channel.name}\` に移動しています...`
+              : `\`${channel.name}\` に接続しています...`,
+          );
+
+          const permissionIssue = await getBotVoicePermissionIssue(interaction, channel);
+          if (permissionIssue) {
+            await replyOrEditEphemeral(interaction, permissionIssue);
+            return;
+          }
+
           await connectOrMove(interaction, channel);
-          await sendDeferredResult(interaction, before ? `\`${channel.name}\` に移動しました。` : `\`${channel.name}\` に参加しました。`);
+          await replyOrEditEphemeral(interaction, before ? `\`${channel.name}\` に移動しました。` : `\`${channel.name}\` に参加しました。`);
         } catch (error) {
           console.error('[voice] join failed:', error);
-          await replyEphemeral(interaction, `ボイスチャンネルへの接続中にエラーが発生しました: ${error.message}`);
+          await replyOrEditEphemeral(interaction, `ボイスチャンネルへの接続中にエラーが発生しました: ${error.message}`);
         }
       },
     },
@@ -173,15 +198,13 @@ module.exports = {
           .slice(0, 25);
 
         if (!files.length) {
-          await interaction.respond([{ name: '候補なし', value: '候補なし' }]);
+          await interaction.respond([{ name: '候補なし', value: '候補なし' }]).catch(() => {});
           return;
         }
 
-        await interaction.respond(files.map((file) => ({ name: file, value: file })));
+        await interaction.respond(files.map((file) => ({ name: file, value: file }))).catch(() => {});
       },
       async execute(interaction, client) {
-        await deferEphemeral(interaction);
-
         const channel = getMemberVoiceChannel(interaction);
         if (!channel) {
           await replyEphemeral(interaction, 'このコマンドを使用するには、まずボイスチャンネルに参加してください。');
@@ -201,6 +224,14 @@ module.exports = {
         }
 
         try {
+          await replyOrEditEphemeral(interaction, `🔊 サウンド '${filename}' の再生準備中です...`);
+
+          const permissionIssue = await getBotVoicePermissionIssue(interaction, channel);
+          if (permissionIssue) {
+            await replyOrEditEphemeral(interaction, permissionIssue);
+            return;
+          }
+
           const connection = await connectOrMove(interaction, channel);
           const player = ensurePlayer(client, interaction.guild.id);
           connection.subscribe(player);
@@ -209,10 +240,10 @@ module.exports = {
           player.stop(true);
           player.play(resource);
 
-          await sendDeferredResult(interaction, `🔊 サウンド '${filename}' を再生します。`);
+          await replyOrEditEphemeral(interaction, `🔊 サウンド '${filename}' を再生します。`);
         } catch (error) {
           console.error('[voice] play failed:', error);
-          await replyEphemeral(interaction, `ボイスチャンネルへの接続または再生中にエラーが発生しました: ${error.message}`);
+          await replyOrEditEphemeral(interaction, `ボイスチャンネルへの接続または再生中にエラーが発生しました: ${error.message}`);
         }
       },
     },
