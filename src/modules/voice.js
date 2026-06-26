@@ -17,6 +17,7 @@ const {
 } = require('@discordjs/voice');
 
 const VOICE_READY_TIMEOUT_MS = 10_000;
+const VOICE_DEBUG = process.env.VOICE_DEBUG === 'true';
 
 
 function getMemberVoiceChannel(interaction) {
@@ -61,6 +62,40 @@ async function getBotVoicePermissionIssue(interaction, channel) {
   return `Bot に \`${channel.name}\` の権限が不足しています: ${missing.join(' / ')}`;
 }
 
+function attachConnectionListeners(connection, guildId) {
+  if (connection._oecuListenersAttached) return;
+  connection._oecuListenersAttached = true;
+
+  connection.on('error', (error) => {
+    console.error(`[voice] Connection error in guild ${guildId}:`, error);
+  });
+
+  connection.on('stateChange', (oldState, newState) => {
+    if (VOICE_DEBUG) {
+      console.log(`[voice] (${guildId}) state: ${oldState.status} -> ${newState.status}`);
+    }
+  });
+
+  if (VOICE_DEBUG) {
+    connection.on('debug', (message) => {
+      console.log(`[voice] (${guildId}) debug: ${message}`);
+    });
+  }
+
+  connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    try {
+      await Promise.race([
+        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+      ]);
+      // チャンネル移動などによる一時的な切断 -> 復帰を待つ
+    } catch {
+      // 本当の切断とみなして破棄する
+      connection.destroy();
+    }
+  });
+}
+
 async function connectOrMove(interaction, channel) {
   let connection = getVoiceConnection(interaction.guild.id);
   if (!connection) {
@@ -69,7 +104,9 @@ async function connectOrMove(interaction, channel) {
       guildId: interaction.guild.id,
       adapterCreator: interaction.guild.voiceAdapterCreator,
       selfDeaf: true,
+      debug: VOICE_DEBUG,
     });
+    attachConnectionListeners(connection, interaction.guild.id);
   } else if (connection.joinConfig.channelId !== channel.id) {
     connection.rejoin({
       channelId: channel.id,

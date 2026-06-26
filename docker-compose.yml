@@ -3,6 +3,10 @@ services:
     image: ${OECU_BOT_IMAGE_REF:-ghcr.io/hiryuto-oecu/oecu-discord-bot:latest}
     container_name: oecu-bot
     restart: unless-stopped
+    # Discord の音声接続は UDP を使います。Docker のブリッジ + NAT 環境では
+    # voice の UDP が確立できず /join /play が Ready に到達しない(AbortError)ことが
+    # あるため、ホストネットワークで動かします。
+    network_mode: host
     env_file:
       - .env
     volumes:
