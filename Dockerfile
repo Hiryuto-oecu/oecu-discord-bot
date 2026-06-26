@@ -11,8 +11,7 @@ COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
 COPY src ./src
-COPY data ./data
-COPY sounds ./sounds
+RUN mkdir -p data sounds
 
 ENV NODE_ENV=production
 

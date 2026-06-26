@@ -3,6 +3,8 @@ npm-debug.log
 .env
 .env.*
 !.env.example
+data
+sounds
 Dockerfile
 docker-compose.yml
 README.md
