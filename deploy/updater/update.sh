@@ -153,10 +153,14 @@ main() {
   fi
 
   target_image_id="$(image_id_for_ref "$target_ref")"
-  if [[ -n "$previous_image_id" && -n "$target_image_id" && "$previous_image_id" == "$target_image_id" ]]; then
+  if [[ -n "$previous_image_id" && -n "$target_image_id" && "$previous_image_id" == "$target_image_id" && "$previous_config_image" == "$target_ref" ]]; then
     write_status "noop" "$mode" "$tag" "image digest unchanged" "$previous_config_image" "$target_ref"
     log "No update needed: image digest unchanged"
     exit 0
+  fi
+
+  if [[ -n "$previous_image_id" && -n "$target_image_id" && "$previous_image_id" == "$target_image_id" ]]; then
+    log "Image digest is unchanged, but container image reference is '$previous_config_image'; recreating with '$target_ref'"
   fi
 
   log "Starting $COMPOSE_SERVICE with $target_ref"
