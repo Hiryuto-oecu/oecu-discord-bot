@@ -1,6 +1,6 @@
 services:
   oecu-bot:
-    build: .
+    image: ${OECU_BOT_IMAGE_REF:-ghcr.io/hiryuto-oecu/oecu-discord-bot:latest}
     container_name: oecu-bot
     restart: unless-stopped
     env_file:
@@ -8,3 +8,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./sounds:/app/sounds:ro
+    healthcheck:
+      test: ["CMD", "node", "src/healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 4
+      start_period: 60s

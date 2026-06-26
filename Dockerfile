@@ -14,5 +14,6 @@ COPY src ./src
 RUN mkdir -p data sounds
 
 ENV NODE_ENV=production
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=4 CMD node src/healthcheck.js
 
 CMD ["node", "src/index.js"]

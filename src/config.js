@@ -67,6 +67,17 @@ const config = {
   oshiraseItemsPerPage: Number(env('OSHIRASE_ITEMS_PER_PAGE', '3')),
 
   enableListChannels: env('ENABLE_LISTCHANNELS', 'false') === 'true',
+
+  updateImage: env('OECU_BOT_IMAGE', 'ghcr.io/hiryuto-oecu/oecu-discord-bot'),
+  updateImageTag: env('OECU_BOT_IMAGE_TAG', 'latest'),
+  modeStateFile: path.resolve(__dirname, '..', env('MODE_STATE_FILE', 'data/mode_state.json')),
+  updateTriggerFile: path.resolve(__dirname, '..', env('UPDATE_TRIGGER_FILE', 'data/update_trigger.json')),
+  updateStatusFile: path.resolve(__dirname, '..', env('UPDATE_STATUS_FILE', 'data/update_status.json')),
+  updateNotifyStateFile: path.resolve(__dirname, '..', env('UPDATE_NOTIFY_STATE_FILE', 'data/update_notify_state.json')),
+  updateStatusCheckIntervalSeconds: Number(env('UPDATE_STATUS_CHECK_INTERVAL_SECONDS', '60')),
+  heartbeatFile: path.resolve(__dirname, '..', env('HEARTBEAT_FILE', 'data/heartbeat.json')),
+  heartbeatIntervalSeconds: Number(env('HEARTBEAT_INTERVAL_SECONDS', '30')),
+  heartbeatMaxAgeSeconds: Number(env('HEARTBEAT_MAX_AGE_SECONDS', '120')),
 };
 
 module.exports = config;

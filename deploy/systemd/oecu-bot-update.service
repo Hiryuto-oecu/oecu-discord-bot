@@ -1,0 +1,16 @@
+[Unit]
+Description=Update oecu Discord bot Docker image
+Documentation=file:@COMPOSE_DIR@/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/oecu-bot-updater.env
+ExecStart=/opt/oecu-bot-updater/update.sh
+WorkingDirectory=@COMPOSE_DIR@
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

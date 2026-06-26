@@ -1,0 +1,12 @@
+[Unit]
+Description=Hourly production update check for oecu Discord bot
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Persistent=true
+Unit=oecu-bot-update.service
+
+[Install]
+WantedBy=timers.target

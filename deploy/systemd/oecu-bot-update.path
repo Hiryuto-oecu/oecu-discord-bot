@@ -1,0 +1,10 @@
+[Unit]
+Description=Immediate update trigger watcher for oecu Discord bot
+
+[Path]
+PathModified=@DATA_DIR@/update_trigger.json
+PathModified=@DATA_DIR@/mode_state.json
+Unit=oecu-bot-update.service
+
+[Install]
+WantedBy=multi-user.target
