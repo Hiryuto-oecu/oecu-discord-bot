@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 const nodemailer = require('nodemailer');
 const crypto = require('node:crypto');
 const { readJson, writeJson } = require('../utils/jsonStore');
@@ -87,7 +87,7 @@ module.exports = {
             { name: '@osakac.ac.jp', value: '@osakac.ac.jp' },
           )),
       async execute(interaction, client) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let userName = interaction.options.getString('user_name', true).toUpperCase();
         const domain = interaction.options.getString('domain', true);
@@ -95,7 +95,7 @@ module.exports = {
         if (!STUDENT_ID_PATTERN.test(userName)) {
           await interaction.followUp({
             content: '学生番号の形式が正しくありません。\n再度、学生番号を確認してください。\n形式例: GP99A123\n(職員・教員の方はお問い合わせください。)',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -105,17 +105,17 @@ module.exports = {
 
         if (existingEntry?.verified) {
           if (String(existingEntry.discord_id) === interaction.user.id) {
-            await interaction.followUp({ content: `学生番号 \`${userName}\` は既に認証済みです。`, ephemeral: true });
+            await interaction.followUp({ content: `学生番号 \`${userName}\` は既に認証済みです。`, flags: MessageFlags.Ephemeral });
           } else {
             console.warn(`[emailVerify] User ${interaction.user.id} tried to verify already verified ID ${userName} owned by ${existingEntry.discord_id}`);
-            await interaction.followUp({ content: `学生番号 \`${userName}\` は他のユーザーによって既に認証されています。問題がある場合は管理者に連絡してください。`, ephemeral: true });
+            await interaction.followUp({ content: `学生番号 \`${userName}\` は他のユーザーによって既に認証されています。問題がある場合は管理者に連絡してください。`, flags: MessageFlags.Ephemeral });
           }
           return;
         }
 
         if (existingEntry && String(existingEntry.discord_id) !== interaction.user.id) {
           console.warn(`[emailVerify] User ${interaction.user.id} tried to verify ID ${userName} pending by ${existingEntry.discord_id}`);
-          await interaction.followUp({ content: `学生番号 \`${userName}\` は現在、他のユーザーが認証手続き中です。しばらく待ってから再度試すか、管理者に連絡してください。`, ephemeral: true });
+          await interaction.followUp({ content: `学生番号 \`${userName}\` は現在、他のユーザーが認証手続き中です。しばらく待ってから再度試すか、管理者に連絡してください。`, flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -128,7 +128,7 @@ module.exports = {
           await sendVerificationEmail(client.config, fullEmail, code);
         } catch (error) {
           console.error(`[emailVerify] Failed to send email to ${fullEmail}:`, error);
-          await interaction.followUp({ content: 'メールの送信に失敗しました。サーバー管理者に連絡してください。', ephemeral: true });
+          await interaction.followUp({ content: 'メールの送信に失敗しました。サーバー管理者に連絡してください。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -147,7 +147,7 @@ module.exports = {
           content: `\`${fullEmail}\` に \`university.bot.verify@gmail.com\` から認証コードを送信しました。\n`
             + `メールを確認し、\`${client.config.codeExpirationMinutes}\`分以内に \`/verify_number\` コマンドでコードを入力してください。\n`
             + '## 大半は迷惑メールフォルダに振り分けられますので、そちらもご確認ください。',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       },
     },
@@ -160,11 +160,11 @@ module.exports = {
           .setDescription('6桁の認証コードを入力してください')
           .setRequired(true)),
       async execute(interaction, client) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const code = interaction.options.getString('code', true);
         if (!/^\d{6}$/.test(code)) {
-          await interaction.followUp({ content: '認証コードの形式が正しくありません (6桁の数字)。\n再度、認証コードを確認してください。', ephemeral: true });
+          await interaction.followUp({ content: '認証コードの形式が正しくありません (6桁の数字)。\n再度、認証コードを確認してください。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -180,13 +180,13 @@ module.exports = {
             const expiresAt = data.expires_at ? new Date(data.expires_at) : null;
             if (!expiresAt || Number.isNaN(expiresAt.getTime())) {
               console.error(`[emailVerify] Invalid expires_at for ${userName}: ${data.expires_at}`);
-              await interaction.followUp({ content: '認証データの処理中にエラーが発生しました。管理者に連絡してください。', ephemeral: true });
+              await interaction.followUp({ content: '認証データの処理中にエラーが発生しました。管理者に連絡してください。', flags: MessageFlags.Ephemeral });
               return;
             }
 
             if (Date.now() > expiresAt.getTime()) {
               console.warn(`[emailVerify] Verification code expired for ${userName} (${interaction.user.id}).`);
-              await interaction.followUp({ content: `この認証コード (\`${code}\`) は有効期限が切れています。\n\`/email_verify\` コマンドで新しいコードをリクエストしてください。`, ephemeral: true });
+              await interaction.followUp({ content: `この認証コード (\`${code}\`) は有効期限が切れています。\n\`/email_verify\` コマンドで新しいコードをリクエストしてください。`, flags: MessageFlags.Ephemeral });
               return;
             }
 
@@ -197,7 +197,7 @@ module.exports = {
 
         if (!targetUserName) {
           console.warn(`[emailVerify] Invalid code entered by ${interaction.user.id}. Code: ${code}`);
-          await interaction.followUp({ content: '認証コードが正しくないか、有効期限が切れています。\nコードを確認するか、`/email_verify` コマンドで新しいコードをリクエストしてください。', ephemeral: true });
+          await interaction.followUp({ content: '認証コードが正しくないか、有効期限が切れています。\nコードを確認するか、`/email_verify` コマンドで新しいコードをリクエストしてください。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -222,12 +222,12 @@ module.exports = {
           }
         } catch (error) {
           console.error('[emailVerify] Role assignment failed:', error);
-          await interaction.followUp({ content: '認証に成功しましたが、ロールの付与中にエラーが発生しました。管理者に連絡してください。', ephemeral: true });
+          await interaction.followUp({ content: '認証に成功しましたが、ロールの付与中にエラーが発生しました。管理者に連絡してください。', flags: MessageFlags.Ephemeral });
           return;
         }
 
         console.info(`[emailVerify] User ${targetUserName} (${interaction.user.id}) successfully verified.`);
-        await interaction.followUp({ content: `認証に成功しました！ (学生番号: \`${targetUserName}\`)`, ephemeral: true });
+        await interaction.followUp({ content: `認証に成功しました！ (学生番号: \`${targetUserName}\`)`, flags: MessageFlags.Ephemeral });
       },
     },
   ],

@@ -7,6 +7,7 @@ const {
   GatewayIntentBits,
   Partials,
   EmbedBuilder,
+  MessageFlags,
 } = require('discord.js');
 const config = require('./config');
 const { registerGuildCommands } = require('./utils/commands');
@@ -20,6 +21,7 @@ const commandModules = [
   require('./modules/gabaReaction'),
   require('./modules/voice'),
   require('./modules/twitterFix'),
+  require('./modules/updater'),
   ...(config.enableJanken ? [require('./modules/janken')] : []),
   ...(config.enableOshirase ? [require('./modules/oshirase')] : []),
   ...(config.enableListChannels ? [require('./modules/channelLister')] : []),
@@ -144,9 +146,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.error('[interaction] Error:', error);
     const message = 'コマンドの実行中にエラーが発生しました。';
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: message, ephemeral: true }).catch(() => {});
+      await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
     } else {
-      await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
   }
 });

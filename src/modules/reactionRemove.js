@@ -1,4 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
+const {
+  MessageFlags,
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionsBitField,
+} = require('discord.js');
 const { truncate } = require('../utils/text');
 const { formatUtc } = require('../utils/time');
 
@@ -46,10 +51,10 @@ module.exports = {
         .setName('remove_reason')
         .setDescription('最近削除されたメッセージの前後1メッセージを表示します。'),
       async execute(interaction, client) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         if (!client.deletedMessages.size) {
-          await interaction.followUp({ content: '❌ 削除されたメッセージの記録がありません。', ephemeral: true });
+          await interaction.followUp({ content: '❌ 削除されたメッセージの記録がありません。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -89,7 +94,7 @@ module.exports = {
         }
 
         embed.setFooter({ text: `削除時刻: ${formatUtc(latest.timestamp)}` });
-        await interaction.followUp({ embeds: [embed], ephemeral: true });
+        await interaction.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral });
       },
     },
   ],

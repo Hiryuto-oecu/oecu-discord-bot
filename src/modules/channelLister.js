@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 
 async function isOwner(user, client) {
   if (client.config.ownerId) return user.id === client.config.ownerId;
@@ -26,12 +26,12 @@ module.exports = {
         .setDescription('サーバー内のチャンネル一覧を表示します (オーナー限定)。'),
       async execute(interaction, client) {
         if (!interaction.guild) {
-          await interaction.reply({ content: 'This command can only be used within a server.', ephemeral: true });
+          await interaction.reply({ content: 'This command can only be used within a server.', flags: MessageFlags.Ephemeral });
           return;
         }
 
         if (!await isOwner(interaction.user, client)) {
-          await interaction.reply({ content: 'Sorry, only the bot owner can use this command.', ephemeral: true });
+          await interaction.reply({ content: 'Sorry, only the bot owner can use this command.', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -47,7 +47,7 @@ module.exports = {
           response = `${response.slice(0, 1990)}\n... (list truncated)`;
         }
 
-        await interaction.reply({ content: response, ephemeral: true });
+        await interaction.reply({ content: response, flags: MessageFlags.Ephemeral });
       },
     },
   ],

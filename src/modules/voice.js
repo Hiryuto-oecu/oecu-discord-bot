@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
+  MessageFlags,
   SlashCommandBuilder,
 } = require('discord.js');
 const {
@@ -59,8 +60,13 @@ async function connectOrMove(interaction, channel) {
     });
   }
 
-  await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-  return connection;
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    return connection;
+  } catch (error) {
+    connection.destroy();
+    throw error;
+  }
 }
 
 function listMp3Files(soundDir) {
@@ -81,6 +87,36 @@ function safeSoundPath(soundDir, filename) {
   return fs.existsSync(fullPath) ? fullPath : null;
 }
 
+async function replyEphemeral(interaction, content) {
+  if (interaction.deferred) {
+    await interaction.editReply({ content });
+    return;
+  }
+  if (interaction.replied) {
+    await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+}
+
+async function deferEphemeral(interaction) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+}
+
+async function sendDeferredResult(interaction, content) {
+  if (interaction.deferred) {
+    await interaction.editReply({ content });
+    return;
+  }
+  if (interaction.replied) {
+    await interaction.followUp({ content });
+    return;
+  }
+  await interaction.reply({ content });
+}
+
 module.exports = {
   name: 'voice',
   commands: [
@@ -91,17 +127,18 @@ module.exports = {
       async execute(interaction) {
         const channel = getMemberVoiceChannel(interaction);
         if (!channel) {
-          await interaction.reply({ content: '先にボイスチャンネルに参加してください。', ephemeral: true });
+          await replyEphemeral(interaction, '先にボイスチャンネルに参加してください。');
           return;
         }
 
         try {
+          await deferEphemeral(interaction);
           const before = getVoiceConnection(interaction.guild.id);
           await connectOrMove(interaction, channel);
-          await interaction.reply({ content: before ? `\`${channel.name}\` に移動しました。` : `\`${channel.name}\` に参加しました。` });
+          await sendDeferredResult(interaction, before ? `\`${channel.name}\` に移動しました。` : `\`${channel.name}\` に参加しました。`);
         } catch (error) {
           console.error('[voice] join failed:', error);
-          await interaction.reply({ content: `ボイスチャンネルへの接続中にエラーが発生しました: ${error.message}`, ephemeral: true });
+          await replyEphemeral(interaction, `ボイスチャンネルへの接続中にエラーが発生しました: ${error.message}`);
         }
       },
     },
@@ -112,7 +149,7 @@ module.exports = {
       async execute(interaction) {
         const connection = getVoiceConnection(interaction.guild.id);
         if (!connection) {
-          await interaction.reply({ content: 'ボイスチャンネルに接続していません。', ephemeral: true });
+          await replyEphemeral(interaction, 'ボイスチャンネルに接続していません。');
           return;
         }
 
@@ -143,23 +180,23 @@ module.exports = {
         await interaction.respond(files.map((file) => ({ name: file, value: file })));
       },
       async execute(interaction, client) {
-        await interaction.deferReply({ ephemeral: true });
+        await deferEphemeral(interaction);
 
         const channel = getMemberVoiceChannel(interaction);
         if (!channel) {
-          await interaction.followUp({ content: 'このコマンドを使用するには、まずボイスチャンネルに参加してください。', ephemeral: true });
+          await replyEphemeral(interaction, 'このコマンドを使用するには、まずボイスチャンネルに参加してください。');
           return;
         }
 
         const filename = interaction.options.getString('filename', true);
         if (filename === '候補なし') {
-          await interaction.followUp({ content: '再生できる有効なサウンドファイルがありません。', ephemeral: true });
+          await replyEphemeral(interaction, '再生できる有効なサウンドファイルがありません。');
           return;
         }
 
         const soundPath = safeSoundPath(client.config.soundDir, filename);
         if (!soundPath) {
-          await interaction.followUp({ content: `ファイル '${filename}' が見つかりませんでした。`, ephemeral: true });
+          await replyEphemeral(interaction, `ファイル '${filename}' が見つかりませんでした。`);
           return;
         }
 
@@ -172,10 +209,10 @@ module.exports = {
           player.stop(true);
           player.play(resource);
 
-          await interaction.followUp({ content: `🔊 サウンド '${filename}' を再生します。`, ephemeral: false });
+          await sendDeferredResult(interaction, `🔊 サウンド '${filename}' を再生します。`);
         } catch (error) {
           console.error('[voice] play failed:', error);
-          await interaction.followUp({ content: `ボイスチャンネルへの接続または再生中にエラーが発生しました: ${error.message}`, ephemeral: true });
+          await replyEphemeral(interaction, `ボイスチャンネルへの接続または再生中にエラーが発生しました: ${error.message}`);
         }
       },
     },

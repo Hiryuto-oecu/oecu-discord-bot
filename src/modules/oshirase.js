@@ -5,6 +5,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  MessageFlags,
 } = require('discord.js');
 const { readJson } = require('../utils/jsonStore');
 const { truncate } = require('../utils/text');
@@ -91,14 +92,14 @@ function createComponents(client, data, userId, pageIndex, totalPages) {
 async function renderPage(interaction, client, pageIndex, update = false) {
   const { data, retrievedAt } = await loadNotificationData(client);
   if (data === null) {
-    const payload = { content: `読み込み失敗: ${retrievedAt}`, ephemeral: true };
+    const payload = { content: `読み込み失敗: ${retrievedAt}`, flags: MessageFlags.Ephemeral };
     if (update) await interaction.reply(payload);
     else await interaction.followUp(payload);
     return;
   }
 
   if (!data.length) {
-    const payload = { content: `お知らせなし (取得: ${retrievedAt})`, ephemeral: true };
+    const payload = { content: `お知らせなし (取得: ${retrievedAt})`, flags: MessageFlags.Ephemeral };
     if (update) await interaction.reply(payload);
     else await interaction.followUp(payload);
     return;
@@ -113,7 +114,7 @@ async function renderPage(interaction, client, pageIndex, update = false) {
   if (update) {
     await interaction.update({ embeds: [embed], components });
   } else {
-    await interaction.followUp({ embeds: [embed], components, ephemeral: false });
+    await interaction.followUp({ embeds: [embed], components });
   }
 }
 
@@ -137,12 +138,12 @@ module.exports = {
 
     const [, action, ownerId, pageText] = interaction.customId.split(':');
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'この操作はコマンド実行者のみ使用できます。', ephemeral: true });
+      await interaction.reply({ content: 'この操作はコマンド実行者のみ使用できます。', flags: MessageFlags.Ephemeral });
       return true;
     }
 
     if (action === 'select') {
-      await interaction.reply({ content: 'お知らせの詳細を表示する機能は開発中です。', ephemeral: true });
+      await interaction.reply({ content: 'お知らせの詳細を表示する機能は開発中です。', flags: MessageFlags.Ephemeral });
       return true;
     }
 

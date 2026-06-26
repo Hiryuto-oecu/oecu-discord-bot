@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   name: 'core',
@@ -38,18 +38,18 @@ module.exports = {
       async execute(interaction, client) {
         const ownerId = client.config.ownerId;
         if (!ownerId) {
-          await interaction.reply({ content: 'エラー: ボットのオーナーIDが設定されていません。再起動できません。', ephemeral: true });
+          await interaction.reply({ content: 'エラー: ボットのオーナーIDが設定されていません。再起動できません。', flags: MessageFlags.Ephemeral });
           return;
         }
 
         if (interaction.user.id !== ownerId) {
           console.warn(`警告: 権限のないユーザー (${interaction.user.tag}, ID: ${interaction.user.id}) が /restart を試行しました。`);
-          await interaction.reply({ content: 'エラー: このコマンドを実行する権限がありません。', ephemeral: true });
+          await interaction.reply({ content: 'エラー: このコマンドを実行する権限がありません。', flags: MessageFlags.Ephemeral });
           return;
         }
 
         console.log(`オーナー (${interaction.user.tag}, ID: ${interaction.user.id}) により再起動コマンドが実行されました。`);
-        await interaction.reply({ content: 'ボットを再起動します...', ephemeral: true });
+        await interaction.reply({ content: 'ボットを再起動します...', flags: MessageFlags.Ephemeral });
         setTimeout(() => {
           console.log(`終了コード ${client.config.restartExitCode} でボットプロセスを終了します。`);
           process.exit(client.config.restartExitCode);

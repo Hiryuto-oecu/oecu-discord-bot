@@ -3,6 +3,7 @@ const {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ComponentType,
+  MessageFlags,
 } = require('discord.js');
 
 module.exports = {
@@ -14,7 +15,7 @@ module.exports = {
         .setDescription('指定したロールを自分に付与します'),
       async execute(interaction, client) {
         if (!interaction.guild) {
-          await interaction.reply({ content: 'このコマンドはサーバー内でのみ使用できます。', ephemeral: true });
+          await interaction.reply({ content: 'このコマンドはサーバー内でのみ使用できます。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -23,7 +24,7 @@ module.exports = {
           .filter(Boolean);
 
         if (!validRoles.length) {
-          await interaction.reply({ content: '利用可能なロールが見つかりません。', ephemeral: true });
+          await interaction.reply({ content: '利用可能なロールが見つかりません。', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -41,7 +42,7 @@ module.exports = {
         const response = await interaction.reply({
           content: '付与するロールを選択してください。',
           components: [row],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
           fetchReply: true,
         });
 

@@ -1,4 +1,4 @@
-const { ContextMenuCommandBuilder, ApplicationCommandType } = require('discord.js');
+const { MessageFlags, ContextMenuCommandBuilder, ApplicationCommandType } = require('discord.js');
 
 module.exports = {
   name: 'gabaReaction',
@@ -8,7 +8,7 @@ module.exports = {
         .setName('GABAリアクション')
         .setType(ApplicationCommandType.Message),
       async execute(interaction) {
-        await interaction.reply({ content: 'この機能は現在開発中です。', ephemeral: true });
+        await interaction.reply({ content: 'この機能は現在開発中です。', flags: MessageFlags.Ephemeral });
       },
     },
   ],

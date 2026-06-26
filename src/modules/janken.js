@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { readJson, writeJson } = require('../utils/jsonStore');
 
 const hands = ['グー', 'チョキ', 'パー'];
@@ -39,7 +39,7 @@ async function ensureJankenChannel(interaction, client, leaderboard = false) {
     content: leaderboard
       ? `じゃんけんリーダーボードは ${mention} チャンネルでのみ表示できます。`
       : `じゃんけんは ${mention} チャンネルでのみプレイできます。`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
   return false;
 }
@@ -105,7 +105,7 @@ module.exports = {
           .slice(0, 10);
 
         if (!ranking.length) {
-          await interaction.reply({ content: 'まだ誰もじゃんけんで連勝していません。', ephemeral: true });
+          await interaction.reply({ content: 'まだ誰もじゃんけんで連勝していません。', flags: MessageFlags.Ephemeral });
           return;
         }
 
