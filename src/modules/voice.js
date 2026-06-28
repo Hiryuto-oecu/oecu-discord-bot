@@ -59,11 +59,18 @@ async function getYoutubeInstance(client, forceRegen = false) {
 
   let opts = {};
 
-  // 1. 動的な PO Token 生成を試みる (自動)
+  // 1. 動的な PO Token 生成を試みる (自動 - 5秒タイムアウト)
   try {
     if (typeof generatePoToken === 'function') {
       console.log('[voice] Generating dynamic PO Token...');
-      const { poToken, visitorData } = await generatePoToken();
+      
+      const tokenPromise = generatePoToken();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('PO Token generation timed out')), 5000)
+      );
+
+      const { poToken, visitorData } = await Promise.race([tokenPromise, timeoutPromise]);
+      
       if (poToken && visitorData) {
         opts.po_token = poToken;
         opts.visitor_data = visitorData;
@@ -71,7 +78,7 @@ async function getYoutubeInstance(client, forceRegen = false) {
       }
     }
   } catch (err) {
-    console.warn('[voice] Failed to generate dynamic PO Token. Trying cookies...', err);
+    console.warn('[voice] Failed to generate dynamic PO Token. Trying cookies...', err.message || err);
   }
 
   // 2. Cookie が設定されていれば追加する (フォールバック)
