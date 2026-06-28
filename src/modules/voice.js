@@ -15,6 +15,15 @@ const {
   VoiceConnectionStatus,
   entersState,
 } = require('@discordjs/voice');
+const play = require('play-dl');
+const ffmpeg = require('ffmpeg-static');
+
+if (ffmpeg) {
+  const ffmpegDir = path.dirname(ffmpeg);
+  if (!process.env.PATH.includes(ffmpegDir)) {
+    process.env.PATH = `${ffmpegDir}${path.delimiter}${process.env.PATH}`;
+  }
+}
 
 const VOICE_READY_TIMEOUT_MS = 20_000;
 const VOICE_DEBUG = process.env.VOICE_DEBUG === 'true';
@@ -281,6 +290,79 @@ module.exports = {
         } catch (error) {
           console.error('[voice] play failed:', error);
           await replyOrEditEphemeral(interaction, `ボイスチャンネルへの接続または再生中にエラーが発生しました: ${error.message}`);
+        }
+      },
+    },
+    {
+      data: new SlashCommandBuilder()
+        .setName('yt-play')
+        .setDescription('YouTubeの動画または音楽を再生します。')
+        .addStringOption((option) => option
+          .setName('query')
+          .setDescription('再生したいYouTube動画のURLまたは検索キーワードを入力してください。')
+          .setRequired(true)),
+      async execute(interaction, client) {
+        const channel = getMemberVoiceChannel(interaction);
+        if (!channel) {
+          await replyEphemeral(interaction, 'このコマンドを使用するには、まずボイスチャンネルに参加してください。');
+          return;
+        }
+
+        const query = interaction.options.getString('query', true);
+
+        try {
+          // 処理に時間がかかる可能性があるため、レスポンスを保留する
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+          const permissionIssue = await getBotVoicePermissionIssue(interaction, channel);
+          if (permissionIssue) {
+            await replyOrEditEphemeral(interaction, permissionIssue);
+            return;
+          }
+
+          let url = query;
+          let title = '';
+
+          await replyOrEditEphemeral(interaction, '🔍 YouTubeの動画情報を検索/取得しています...');
+
+          const validation = play.yt_validate(query);
+          if (validation === false) {
+            // 検索キーワードとして処理する
+            const searchResults = await play.search(query, { limit: 1 });
+            if (!searchResults || searchResults.length === 0) {
+              await replyOrEditEphemeral(interaction, `❌ 「${query}」に一致する動画が見つかりませんでした。`);
+              return;
+            }
+            url = searchResults[0].url;
+            title = searchResults[0].title;
+          } else {
+            // URLの場合
+            try {
+              const videoInfo = await play.video_info(url);
+              title = videoInfo.video_details.title;
+            } catch (err) {
+              title = 'YouTube 動画';
+            }
+          }
+
+          await replyOrEditEphemeral(interaction, `🔊 「${title}」のストリームを準備中...`);
+
+          const connection = await connectOrMove(interaction, channel);
+          const player = ensurePlayer(client, interaction.guild.id);
+          connection.subscribe(player);
+
+          const stream = await play.stream(url);
+          const resource = createAudioResource(stream.stream, {
+            inputType: stream.type,
+          });
+
+          player.stop(true);
+          player.play(resource);
+
+          await replyOrEditEphemeral(interaction, `🔊 「${title}」を再生します。\n${url}`);
+        } catch (error) {
+          console.error('[voice] yt-play failed:', error);
+          await replyOrEditEphemeral(interaction, `YouTube動画の再生中にエラーが発生しました: ${error.message}`);
         }
       },
     },
