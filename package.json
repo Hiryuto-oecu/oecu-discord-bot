@@ -23,7 +23,8 @@
     "libsodium-wrappers": "^0.7.15",
     "nodemailer": "^6.9.16",
     "opusscript": "^0.1.1",
-    "play-dl": "^1.9.7",
+    "youtubei.js": "^17.2.0",
+    "youtube-po-token-generator": "^0.6.0",
     "ffmpeg-static": "^5.2.0"
   }
 }

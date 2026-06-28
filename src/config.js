@@ -1,5 +1,18 @@
+const fs = require('node:fs');
 const path = require('node:path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
+let youtubeCookie = env('YOUTUBE_COOKIE');
+if (!youtubeCookie) {
+  const cookiePath = path.resolve(__dirname, '..', 'data', 'youtube_cookie.txt');
+  if (fs.existsSync(cookiePath)) {
+    try {
+      youtubeCookie = fs.readFileSync(cookiePath, 'utf8').trim();
+    } catch (err) {
+      console.warn('data/youtube_cookie.txt の読み込みに失敗しました:', err);
+    }
+  }
+}
 
 function parseIds(value, fallback = []) {
   if (!value) return fallback;
@@ -25,6 +38,8 @@ const config = {
   ownerId: envId('BOT_OWNER_ID'),
   guildIds: parseIds(env('DISCORD_GUILD_IDS'), [defaultGuildId]),
   restartExitCode: Number(env('RESTART_EXIT_CODE', '42')),
+
+  youtubeCookie,
 
   dataDir: path.resolve(__dirname, '..', env('DATA_DIR', 'data')),
   soundDir: path.resolve(__dirname, '..', env('SOUND_DIR', 'sounds')),

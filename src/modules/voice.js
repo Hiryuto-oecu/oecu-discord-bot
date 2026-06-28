@@ -14,8 +14,8 @@ const {
   NoSubscriberBehavior,
   VoiceConnectionStatus,
   entersState,
+  StreamType,
 } = require('@discordjs/voice');
-const play = require('play-dl');
 const ffmpeg = require('ffmpeg-static');
 
 if (ffmpeg) {
@@ -28,6 +28,61 @@ if (ffmpeg) {
 const VOICE_READY_TIMEOUT_MS = 20_000;
 const VOICE_DEBUG = process.env.VOICE_DEBUG === 'true';
 
+let ytInstance = null;
+let InnertubeClass = null;
+let generatePoToken = null;
+
+async function getYoutubeInstance(client, forceRegen = false) {
+  if (!InnertubeClass || !generatePoToken) {
+    try {
+      const yti = await import('youtubei.js');
+      InnertubeClass = yti.Innertube || yti.default?.Innertube || yti.default;
+    } catch (err) {
+      console.error('[voice] Failed to import youtubei.js:', err);
+      throw err;
+    }
+
+    try {
+      const gen = await import('youtube-po-token-generator');
+      generatePoToken = gen.generate || gen.default?.generate || gen.default || gen;
+    } catch (err) {
+      try {
+        const gen = require('youtube-po-token-generator');
+        generatePoToken = gen.generate || gen;
+      } catch (err2) {
+        console.warn('[voice] Failed to import youtube-po-token-generator, proceeding without it:', err2);
+      }
+    }
+  }
+
+  if (ytInstance && !forceRegen) return ytInstance;
+
+  let opts = {};
+
+  // 1. 動的な PO Token 生成を試みる (自動)
+  try {
+    if (typeof generatePoToken === 'function') {
+      console.log('[voice] Generating dynamic PO Token...');
+      const { poToken, visitorData } = await generatePoToken();
+      if (poToken && visitorData) {
+        opts.po_token = poToken;
+        opts.visitor_data = visitorData;
+        console.log('[voice] Dynamic PO Token generated successfully.');
+      }
+    }
+  } catch (err) {
+    console.warn('[voice] Failed to generate dynamic PO Token. Trying cookies...', err);
+  }
+
+  // 2. Cookie が設定されていれば追加する (フォールバック)
+  if (client.config.youtubeCookie) {
+    opts.cookie = client.config.youtubeCookie;
+    console.log('[voice] Using provided YouTube cookies.');
+  }
+
+  ytInstance = await InnertubeClass.create(opts);
+  return ytInstance;
+}
 
 function getMemberVoiceChannel(interaction) {
   const member = interaction.member;
@@ -320,46 +375,74 @@ module.exports = {
             return;
           }
 
-          let url = query;
-          let title = '';
-
           await replyOrEditEphemeral(interaction, '🔍 YouTubeの動画情報を検索/取得しています...');
 
-          const validation = play.yt_validate(query);
-          if (validation === false) {
-            // 検索キーワードとして処理する
-            const searchResults = await play.search(query, { limit: 1 });
-            if (!searchResults || searchResults.length === 0) {
-              await replyOrEditEphemeral(interaction, `❌ 「${query}」に一致する動画が見つかりませんでした。`);
-              return;
+          let yt = await getYoutubeInstance(client);
+          let videoId = null;
+          let title = '';
+
+          const isUrl = query.includes('youtu.be') || query.includes('youtube.com');
+
+          async function resolveVideo(forceRegen = false) {
+            if (forceRegen) {
+              yt = await getYoutubeInstance(client, true);
             }
-            url = searchResults[0].url;
-            title = searchResults[0].title;
-          } else {
-            // URLの場合
+
+            if (isUrl) {
+              const match = query.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+              if (!match) {
+                throw new Error('無効なYouTube URLです。');
+              }
+              videoId = match[1];
+            } else {
+              const search = await yt.search(query, { type: 'video' });
+              const videos = search.videos || (search.results && search.results.filter(r => r.type === 'Video')) || [];
+              if (videos.length === 0) {
+                throw new Error('動画が見つかりませんでした。');
+              }
+              videoId = videos[0].id;
+              title = (videos[0].title && typeof videos[0].title === 'object')
+                ? (videos[0].title.text || videos[0].title.toString())
+                : videos[0].title;
+            }
+
+            const info = await yt.getInfo(videoId);
+            title = title || info.basic_info.title;
+            const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+            if (!format) {
+              throw new Error('適切な音声フォーマットが見つかりませんでした。');
+            }
+            const streamUrl = format.decipher(yt.session.player);
+            return { streamUrl, title, videoId };
+          }
+
+          let videoData;
+          try {
+            videoData = await resolveVideo(false);
+          } catch (firstError) {
+            console.warn('[voice] Initial stream resolve failed, retrying with regenerated token...', firstError);
             try {
-              const videoInfo = await play.video_info(url);
-              title = videoInfo.video_details.title;
-            } catch (err) {
-              title = 'YouTube 動画';
+              videoData = await resolveVideo(true);
+            } catch (retryError) {
+              throw new Error(`動画情報の取得に失敗しました: ${retryError.message} (初回エラー: ${firstError.message})`);
             }
           }
 
-          await replyOrEditEphemeral(interaction, `🔊 「${title}」のストリームを準備中...`);
+          const { streamUrl, title: finalTitle, videoId: finalId } = videoData;
+          const videoUrl = `https://www.youtube.com/watch?v=${finalId}`;
+
+          await replyOrEditEphemeral(interaction, `🔊 「${finalTitle}」を再生します。\n${videoUrl}`);
 
           const connection = await connectOrMove(interaction, channel);
           const player = ensurePlayer(client, interaction.guild.id);
           connection.subscribe(player);
 
-          const stream = await play.stream(url);
-          const resource = createAudioResource(stream.stream, {
-            inputType: stream.type,
+          const resource = createAudioResource(streamUrl, {
+            inputType: StreamType.Arbitrary,
           });
 
           player.stop(true);
           player.play(resource);
-
-          await replyOrEditEphemeral(interaction, `🔊 「${title}」を再生します。\n${url}`);
         } catch (error) {
           console.error('[voice] yt-play failed:', error);
           await replyOrEditEphemeral(interaction, `YouTube動画の再生中にエラーが発生しました: ${error.message}`);
