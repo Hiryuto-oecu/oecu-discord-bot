@@ -189,6 +189,8 @@ main() {
   local prev_info
   prev_info="$(get_image_info "$previous_image_id" "$previous_config_image")"
 
+  write_status "starting" "$mode" "$tag" "update process started" "$prev_info" ""
+
   log "Pulling $target_ref"
   if ! compose "$target_ref" pull "$COMPOSE_SERVICE"; then
     write_status "failure" "$mode" "$tag" "docker compose pull failed" "$prev_info" ""

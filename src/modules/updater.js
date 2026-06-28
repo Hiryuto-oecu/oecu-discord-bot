@@ -76,13 +76,15 @@ async function notifyOwner(client, status) {
   const owner = await client.users.fetch(client.config.ownerId).catch(() => null);
   if (!owner) return;
 
-  const title = status.result === 'success'
-    ? '✅ Bot 更新が完了しました'
-    : status.result === 'rollback'
-      ? '↩️ Bot 更新に失敗し、ロールバックしました'
-      : status.result === 'noop'
-        ? 'ℹ️ Bot 更新: 変更なし'
-        : '❌ Bot 更新に失敗しました';
+  const title = status.result === 'starting'
+    ? '🔄 Bot 更新を開始しました'
+    : status.result === 'success'
+      ? '✅ Bot 更新が完了しました'
+      : status.result === 'rollback'
+        ? '↩️ Bot 更新に失敗し、ロールバックしました'
+        : status.result === 'noop'
+          ? 'ℹ️ Bot 更新: 変更なし'
+          : '❌ Bot 更新に失敗しました';
 
   const fields = [
     { name: 'モード', value: status.mode || 'unknown', inline: true },
@@ -101,9 +103,13 @@ async function notifyOwner(client, status) {
     fields.push({ name: '現在のコミット', value: `\`${info.commit}\``, inline: true });
   }
 
+  const embedColor = status.result === 'starting'
+    ? 0x3498db
+    : (status.result === 'success' || status.result === 'noop' ? 0x57f287 : 0xed4245);
+
   const embed = new EmbedBuilder()
     .setTitle(title)
-    .setColor(status.result === 'success' || status.result === 'noop' ? 0x57f287 : 0xed4245)
+    .setColor(embedColor)
     .addFields(fields)
     .setTimestamp(new Date());
 
@@ -122,16 +128,18 @@ async function notifyChannel(client, status) {
     return;
   }
 
-  const title = status.result === 'success'
-    ? '✅ Botのアップデートが完了しました'
-    : status.result === 'rollback'
-      ? '↩️ Botのアップデートに失敗し、ロールバックしました'
-      : status.result === 'noop'
-        ? 'ℹ️ Botアップデート: 変更はありません'
-        : '❌ Botのアップデートに失敗しました';
+  const title = status.result === 'starting'
+    ? '🔄 Botのアップデートを開始しました'
+    : status.result === 'success'
+      ? '✅ Botのアップデートが完了しました'
+      : status.result === 'rollback'
+        ? '↩️ Botのアップデートに失敗し、ロールバックしました'
+        : status.result === 'noop'
+          ? 'ℹ️ Botアップデート: 変更はありません'
+          : '❌ Botのアップデートに失敗しました';
 
   const fields = [
-    { name: 'ステータス', value: status.result === 'success' ? '成功' : status.result === 'rollback' ? 'ロールバック' : '失敗', inline: true },
+    { name: 'ステータス', value: status.result === 'starting' ? '開始' : status.result === 'success' ? '成功' : status.result === 'rollback' ? 'ロールバック' : '失敗', inline: true },
     { name: '時刻', value: formatDiscordTimestamp(status.finished_at || status.started_at), inline: true },
   ];
 
@@ -140,9 +148,13 @@ async function notifyChannel(client, status) {
     fields.push({ name: 'バージョン (コミット)', value: `\`${info.commit}\``, inline: true });
   }
 
+  const embedColor = status.result === 'starting'
+    ? 0x3498db
+    : (status.result === 'success' || status.result === 'noop' ? 0x57f287 : 0xed4245);
+
   const embed = new EmbedBuilder()
     .setTitle(title)
-    .setColor(status.result === 'success' || status.result === 'noop' ? 0x57f287 : 0xed4245)
+    .setColor(embedColor)
     .addFields(fields)
     .setTimestamp(new Date());
 
@@ -156,14 +168,23 @@ async function checkUpdateStatusNotification(client) {
   if (!status?.id) return;
 
   const notifyState = await readJson(client.config.updateNotifyStateFile, {});
-  if (notifyState.last_notified_id === status.id) return;
+  if (notifyState.last_notified_id === status.id && notifyState.last_notified_result === status.result) return;
 
   if (status.result !== 'noop') {
-    await notifyOwner(client, status);
-    await notifyChannel(client, status);
+    try {
+      await notifyOwner(client, status);
+    } catch (error) {
+      console.error('[updater] Failed to notify owner:', error);
+    }
+    try {
+      await notifyChannel(client, status);
+    } catch (error) {
+      console.error('[updater] Failed to notify channel:', error);
+    }
   }
   await writeJson(client.config.updateNotifyStateFile, {
     last_notified_id: status.id,
+    last_notified_result: status.result,
     notified_at: nowIso(),
   });
 }
@@ -336,4 +357,9 @@ module.exports = {
     startHeartbeat(client);
     startUpdateStatusNotifier(client);
   },
+
+  // Test exports
+  _checkUpdateStatusNotification: checkUpdateStatusNotification,
+  _notifyOwner: notifyOwner,
+  _notifyChannel: notifyChannel,
 };
