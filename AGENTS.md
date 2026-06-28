@@ -16,7 +16,9 @@ Manage dependencies and run the bot with the following npm commands:
 - `npm start` / `npm run dev`: Starts the bot server pointing directly to `src/index.js`.
 - `npm run healthcheck`: Run the local bot health check (`src/healthcheck.js`).
 - `npm run loop`: Runs `start.sh` which executes the bot in a crash-recovery loop.
-- `docker compose up -d --build`: Starts the application in a local Docker container.
+
+> [!IMPORTANT]
+> **Docker Constraints**: Docker is not installed/running on this Linux host. Do not attempt to run or recommend `docker` or `docker compose` commands. Always use the local npm commands listed above instead.
 
 ## Coding Style & Naming Conventions
 - **Module System**: Standard CommonJS (`require` / `module.exports`).
@@ -40,3 +42,7 @@ No automated testing frameworks (e.g., Jest) are configured.
   - `fix`: bug fix (e.g., `fix: resolve voice connection timeout`).
   - `chore`: repository maintenance (e.g., `chore: update dependencies`).
 - **Pull Requests**: Provide a summary of the change, confirm configuration settings (e.g., new variables in `.env.example`), and reference any resolved issues.
+
+## Post-Task Guidelines
+- **Git Actions**: After completing all instructed tasks, if the project is managed under Git, always propose `git add` and `git commit` commands to the user at the end of the response.
+
