@@ -55,6 +55,22 @@ function startHeartbeat(client) {
   timer.unref?.();
 }
 
+function parseImageAndCommit(imageStr) {
+  if (!imageStr) return null;
+  const match = imageStr.match(/^(.*?)\s*\(([^)]+)\)$/);
+  if (match) {
+    return { image: match[1], commit: match[2] };
+  }
+  return { image: imageStr, commit: 'unknown' };
+}
+
+function formatDiscordTimestamp(isoString) {
+  if (!isoString || isoString === 'unknown') return 'unknown';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return isoString;
+  return `<t:${Math.floor(date.getTime() / 1000)}:f>`;
+}
+
 async function notifyOwner(client, status) {
   if (!client.config.ownerId) return;
   const owner = await client.users.fetch(client.config.ownerId).catch(() => null);
@@ -71,11 +87,19 @@ async function notifyOwner(client, status) {
   const fields = [
     { name: 'モード', value: status.mode || 'unknown', inline: true },
     { name: 'タグ', value: status.target_tag || 'unknown', inline: true },
-    { name: '時刻', value: status.finished_at || status.started_at || 'unknown', inline: false },
+    { name: '時刻', value: formatDiscordTimestamp(status.finished_at || status.started_at), inline: false },
   ];
   if (status.message) fields.push({ name: '詳細', value: String(status.message).slice(0, 1000), inline: false });
-  if (status.previous_image) fields.push({ name: '以前の image', value: String(status.previous_image).slice(0, 1000), inline: false });
-  if (status.current_image) fields.push({ name: '現在の image', value: String(status.current_image).slice(0, 1000), inline: false });
+  if (status.previous_image) {
+    const info = parseImageAndCommit(status.previous_image);
+    fields.push({ name: '以前の image', value: info.image, inline: true });
+    fields.push({ name: '以前のコミット', value: `\`${info.commit}\``, inline: true });
+  }
+  if (status.current_image) {
+    const info = parseImageAndCommit(status.current_image);
+    fields.push({ name: '現在の image', value: info.image, inline: true });
+    fields.push({ name: '現在のコミット', value: `\`${info.commit}\``, inline: true });
+  }
 
   const embed = new EmbedBuilder()
     .setTitle(title)
@@ -120,8 +144,8 @@ function createStatusEmbed(status, mode) {
       { name: '現在のモード', value: mode, inline: true },
       { name: '直近結果', value: status?.result || '記録なし', inline: true },
       { name: '対象タグ', value: status?.target_tag || 'unknown', inline: true },
-      { name: '開始', value: status?.started_at || 'unknown', inline: true },
-      { name: '完了', value: status?.finished_at || 'unknown', inline: true },
+      { name: '開始', value: formatDiscordTimestamp(status?.started_at), inline: true },
+      { name: '完了', value: formatDiscordTimestamp(status?.finished_at), inline: true },
     )
     .setTimestamp(new Date());
 
@@ -129,10 +153,18 @@ function createStatusEmbed(status, mode) {
     embed.addFields({ name: '詳細', value: String(status.message).slice(0, 1000), inline: false });
   }
   if (status?.current_image) {
-    embed.addFields({ name: '現在の image', value: String(status.current_image).slice(0, 1000), inline: false });
+    const info = parseImageAndCommit(status.current_image);
+    embed.addFields(
+      { name: '現在の image', value: info.image, inline: true },
+      { name: '現在のコミット', value: `\`${info.commit}\``, inline: true }
+    );
   }
   if (status?.previous_image) {
-    embed.addFields({ name: '以前の image', value: String(status.previous_image).slice(0, 1000), inline: false });
+    const info = parseImageAndCommit(status.previous_image);
+    embed.addFields(
+      { name: '以前の image', value: info.image, inline: true },
+      { name: '以前のコミット', value: `\`${info.commit}\``, inline: true }
+    );
   }
 
   return embed;
