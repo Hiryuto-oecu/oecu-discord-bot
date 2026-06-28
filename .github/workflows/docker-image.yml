@@ -147,7 +147,11 @@ jobs:
                   'fields': [{'name': 'Workflow Run', 'value': f'[View Run Log]({run_url})', 'inline': False}]
               }]
           }
-          req = urllib.request.Request(webhook_url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+          req = urllib.request.Request(
+              webhook_url,
+              data=json.dumps(data).encode('utf-8'),
+              headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
+          )
           urllib.request.urlopen(req)
           "
 
@@ -174,6 +178,10 @@ jobs:
                   'fields': [{'name': 'Workflow Run', 'value': f'[View Run Log]({run_url})', 'inline': False}]
               }]
           }
-          req = urllib.request.Request(webhook_url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+          req = urllib.request.Request(
+              webhook_url,
+              data=json.dumps(data).encode('utf-8'),
+              headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
+          )
           urllib.request.urlopen(req)
           "

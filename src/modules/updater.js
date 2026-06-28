@@ -110,6 +110,47 @@ async function notifyOwner(client, status) {
   await owner.send({ embeds: [embed] });
 }
 
+async function notifyChannel(client, status) {
+  const channelConfig = await readJson(client.config.updateNotifyChannelFile, null);
+  const channelId = channelConfig?.channelId || client.config.updateNotifyChannelId;
+
+  if (!channelId) return;
+
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    console.warn(`[updater] Notification channel ${channelId} not found or not text-based.`);
+    return;
+  }
+
+  const title = status.result === 'success'
+    ? '✅ Botのアップデートが完了しました'
+    : status.result === 'rollback'
+      ? '↩️ Botのアップデートに失敗し、ロールバックしました'
+      : status.result === 'noop'
+        ? 'ℹ️ Botアップデート: 変更はありません'
+        : '❌ Botのアップデートに失敗しました';
+
+  const fields = [
+    { name: 'ステータス', value: status.result === 'success' ? '成功' : status.result === 'rollback' ? 'ロールバック' : '失敗', inline: true },
+    { name: '時刻', value: formatDiscordTimestamp(status.finished_at || status.started_at), inline: true },
+  ];
+
+  if (status.current_image) {
+    const info = parseImageAndCommit(status.current_image);
+    fields.push({ name: 'バージョン (コミット)', value: `\`${info.commit}\``, inline: true });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setColor(status.result === 'success' || status.result === 'noop' ? 0x57f287 : 0xed4245)
+    .addFields(fields)
+    .setTimestamp(new Date());
+
+  await channel.send({ embeds: [embed] }).catch((error) => {
+    console.error(`[updater] Failed to send update notification to channel ${channelId}:`, error);
+  });
+}
+
 async function checkUpdateStatusNotification(client) {
   const status = await readJson(client.config.updateStatusFile, null);
   if (!status?.id) return;
@@ -119,6 +160,7 @@ async function checkUpdateStatusNotification(client) {
 
   if (status.result !== 'noop') {
     await notifyOwner(client, status);
+    await notifyChannel(client, status);
   }
   await writeJson(client.config.updateNotifyStateFile, {
     last_notified_id: status.id,
@@ -231,6 +273,50 @@ module.exports = {
         });
         await interaction.reply({
           content: `更新モードを \`${mode}\` に切り替えました。systemd updater が timer 設定を反映します。`,
+          flags: MessageFlags.Ephemeral,
+        });
+      },
+    },
+    {
+      data: new SlashCommandBuilder()
+        .setName('update_channel')
+        .setDescription('Bot更新通知を送信するチャンネルを設定します (Owner限定)。')
+        .addChannelOption((option) => option
+          .setName('channel')
+          .setDescription('通知を送信するテキストチャンネル (指定しない場合は通知を無効化)')
+          .setRequired(false)),
+      async execute(interaction, client) {
+        if (!await replyOwnerOnly(interaction, client)) return;
+        const channel = interaction.options.getChannel('channel');
+
+        if (!channel) {
+          await writeJson(client.config.updateNotifyChannelFile, {
+            channelId: null,
+            updated_at: nowIso(),
+            updated_by: interaction.user.id,
+          });
+          await interaction.reply({
+            content: 'Bot更新通知の送信先設定を解除しました。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (!channel.isTextBased()) {
+          await interaction.reply({
+            content: 'テキストチャンネルを指定してください。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await writeJson(client.config.updateNotifyChannelFile, {
+          channelId: channel.id,
+          updated_at: nowIso(),
+          updated_by: interaction.user.id,
+        });
+        await interaction.reply({
+          content: `Bot更新通知の送信先を <#${channel.id}> に設定しました。`,
           flags: MessageFlags.Ephemeral,
         });
       },

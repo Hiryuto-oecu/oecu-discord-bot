@@ -74,6 +74,8 @@ const config = {
   updateTriggerFile: path.resolve(__dirname, '..', env('UPDATE_TRIGGER_FILE', 'data/update_trigger.json')),
   updateStatusFile: path.resolve(__dirname, '..', env('UPDATE_STATUS_FILE', 'data/update_status.json')),
   updateNotifyStateFile: path.resolve(__dirname, '..', env('UPDATE_NOTIFY_STATE_FILE', 'data/update_notify_state.json')),
+  updateNotifyChannelFile: path.resolve(__dirname, '..', env('UPDATE_NOTIFY_CHANNEL_FILE', 'data/update_notify_channel.json')),
+  updateNotifyChannelId: envId('UPDATE_NOTIFY_CHANNEL_ID'),
   updateStatusCheckIntervalSeconds: Number(env('UPDATE_STATUS_CHECK_INTERVAL_SECONDS', '60')),
   heartbeatFile: path.resolve(__dirname, '..', env('HEARTBEAT_FILE', 'data/heartbeat.json')),
   heartbeatIntervalSeconds: Number(env('HEARTBEAT_INTERVAL_SECONDS', '30')),
