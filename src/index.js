@@ -1,3 +1,6 @@
+const dns = require('node:dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const {

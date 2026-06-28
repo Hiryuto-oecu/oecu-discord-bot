@@ -16,7 +16,7 @@ const {
   entersState,
 } = require('@discordjs/voice');
 
-const VOICE_READY_TIMEOUT_MS = 10_000;
+const VOICE_READY_TIMEOUT_MS = 20_000;
 const VOICE_DEBUG = process.env.VOICE_DEBUG === 'true';
 
 
