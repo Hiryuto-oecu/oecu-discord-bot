@@ -41,18 +41,24 @@ get_image_info() {
   fi
 
   local commit
-  commit="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ref" 2>/dev/null || true)"
+  commit="$(docker inspect -f '{{if and .Config .Config.Labels}}{{index .Config.Labels "org.opencontainers.image.revision"}}{{end}}' "$ref" 2>/dev/null || true)"
 
   if [[ -z "$commit" || "$commit" == "<no value>" ]]; then
-    local image_id
-    image_id="$(docker image inspect -f '{{.Id}}' "$ref" 2>/dev/null || true)"
-    if [[ "$image_id" =~ sha256:([0-9a-f]{12}) ]]; then
+    if [[ "$ref" =~ ^sha256:([0-9a-fA-F]{12}) ]]; then
       commit="${BASH_REMATCH[1]}"
-    elif [[ -n "$image_id" ]]; then
-      commit="${image_id#sha256:}"
-      commit="${commit:0:12}"
+    elif [[ "$ref" =~ ^([0-9a-fA-F]{12}) ]]; then
+      commit="${BASH_REMATCH[1]}"
     else
-      commit="unknown"
+      local image_id
+      image_id="$(docker inspect -f '{{.Id}}' "$ref" 2>/dev/null || true)"
+      if [[ "$image_id" =~ ^sha256:([0-9a-fA-F]{12}) ]]; then
+        commit="${BASH_REMATCH[1]}"
+      elif [[ -n "$image_id" ]]; then
+        commit="${image_id#sha256:}"
+        commit="${commit:0:12}"
+      else
+        commit="unknown"
+      fi
     fi
   else
     commit="${commit:0:7}"
@@ -132,7 +138,7 @@ container_config_image() {
 }
 
 image_id_for_ref() {
-  docker image inspect -f '{{.Id}}' "$1" 2>/dev/null || true
+  docker inspect -f '{{.Id}}' "$1" 2>/dev/null || true
 }
 
 wait_healthy() {
