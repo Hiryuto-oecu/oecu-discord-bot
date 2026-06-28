@@ -93,7 +93,9 @@ async function checkUpdateStatusNotification(client) {
   const notifyState = await readJson(client.config.updateNotifyStateFile, {});
   if (notifyState.last_notified_id === status.id) return;
 
-  await notifyOwner(client, status);
+  if (status.result !== 'noop') {
+    await notifyOwner(client, status);
+  }
   await writeJson(client.config.updateNotifyStateFile, {
     last_notified_id: status.id,
     notified_at: nowIso(),

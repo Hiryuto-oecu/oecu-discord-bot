@@ -31,6 +31,40 @@ json_escape() {
   python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
 }
 
+get_image_info() {
+  local ref="$1"
+  local config_image="$2"
+
+  if [[ -z "$ref" ]]; then
+    printf '%s\n' "$config_image"
+    return
+  fi
+
+  local commit
+  commit="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ref" 2>/dev/null || true)"
+
+  if [[ -z "$commit" || "$commit" == "<no value>" ]]; then
+    local image_id
+    image_id="$(docker image inspect -f '{{.Id}}' "$ref" 2>/dev/null || true)"
+    if [[ "$image_id" =~ sha256:([0-9a-f]{12}) ]]; then
+      commit="${BASH_REMATCH[1]}"
+    elif [[ -n "$image_id" ]]; then
+      commit="${image_id#sha256:}"
+      commit="${commit:0:12}"
+    else
+      commit="unknown"
+    fi
+  else
+    commit="${commit:0:7}"
+  fi
+
+  if [[ -n "$config_image" ]]; then
+    printf '%s (%s)\n' "$config_image" "$commit"
+  else
+    printf '%s (%s)\n' "$ref" "$commit"
+  fi
+}
+
 write_status() {
   local result="$1"
   local mode="$2"
@@ -146,15 +180,21 @@ main() {
   previous_image_id="$(container_image_id)"
   previous_config_image="$(container_config_image)"
 
+  local prev_info
+  prev_info="$(get_image_info "$previous_image_id" "$previous_config_image")"
+
   log "Pulling $target_ref"
   if ! compose "$target_ref" pull "$COMPOSE_SERVICE"; then
-    write_status "failure" "$mode" "$tag" "docker compose pull failed" "$previous_config_image" ""
+    write_status "failure" "$mode" "$tag" "docker compose pull failed" "$prev_info" ""
     exit 1
   fi
 
+  local target_info
+  target_info="$(get_image_info "$target_ref" "")"
+
   target_image_id="$(image_id_for_ref "$target_ref")"
   if [[ -n "$previous_image_id" && -n "$target_image_id" && "$previous_image_id" == "$target_image_id" && "$previous_config_image" == "$target_ref" ]]; then
-    write_status "noop" "$mode" "$tag" "image digest unchanged" "$previous_config_image" "$target_ref"
+    write_status "noop" "$mode" "$tag" "image digest unchanged" "$prev_info" "$target_info"
     log "No update needed: image digest unchanged"
     exit 0
   fi
@@ -165,13 +205,14 @@ main() {
 
   log "Starting $COMPOSE_SERVICE with $target_ref"
   if ! compose "$target_ref" up -d "$COMPOSE_SERVICE"; then
-    write_status "failure" "$mode" "$tag" "docker compose up failed" "$previous_config_image" "$target_ref"
+    write_status "failure" "$mode" "$tag" "docker compose up failed" "$prev_info" "$target_info"
     exit 1
   fi
 
   if wait_healthy; then
-    current_image="$(container_config_image)"
-    write_status "success" "$mode" "$tag" "update completed" "$previous_config_image" "$current_image"
+    local curr_info
+    curr_info="$(get_image_info "$(container_image_id)" "$(container_config_image)")"
+    write_status "success" "$mode" "$tag" "update completed" "$prev_info" "$curr_info"
     log "Update completed successfully"
     exit 0
   fi
@@ -183,8 +224,9 @@ main() {
     docker tag "$previous_image_id" "$rollback_ref"
     log "Rolling back to $rollback_ref"
     if compose "$rollback_ref" up -d "$COMPOSE_SERVICE" && wait_healthy; then
-      current_image="$(container_config_image)"
-      write_status "rollback" "$mode" "$tag" "new image failed healthcheck; rollback completed" "$previous_config_image" "$current_image"
+      local curr_info
+      curr_info="$(get_image_info "$(container_image_id)" "$(container_config_image)")"
+      write_status "rollback" "$mode" "$tag" "new image failed healthcheck; rollback completed" "$prev_info" "$curr_info"
       log "Rollback completed"
       exit 0
     fi
@@ -193,7 +235,7 @@ main() {
     rollback_result="no previous image was available for rollback"
   fi
 
-  write_status "failure" "$mode" "$tag" "new image failed healthcheck; $rollback_result" "$previous_config_image" "$target_ref"
+  write_status "failure" "$mode" "$tag" "new image failed healthcheck; $rollback_result" "$prev_info" "$target_info"
   exit 1
 }
 
