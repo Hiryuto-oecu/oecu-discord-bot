@@ -2,8 +2,6 @@ name: Docker image
 
 on:
   push:
-    branches:
-      - main
   release:
     types:
       - published
@@ -19,6 +17,80 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+      - name: Notify build start
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PAYLOAD: ${{ toJson(github.event) }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 -c "
+          import os, json, urllib.request
+
+          webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+          if not webhook_url:
+              print('DISCORD_WEBHOOK_URL is not set. Skipping.')
+              exit(0)
+
+          event_name = os.environ.get('EVENT_NAME')
+          payload = json.loads(os.environ.get('EVENT_PAYLOAD', '{}'))
+          ref_name = os.environ.get('REF_NAME')
+          sha = os.environ.get('SHA', '')
+          repo = os.environ.get('REPOSITORY')
+
+          fields = []
+          if event_name == 'push':
+              commit = payload.get('head_commit') or {}
+              commit_msg = commit.get('message', 'No commit message')
+              author = commit.get('author', {}).get('name', 'Unknown')
+              commit_url = commit.get('url', f'https://github.com/{repo}/commit/{sha}')
+              
+              title = '🔨 Build Started (Commit)'
+              description = 'Docker image build process has started for a commit.'
+              fields.append({'name': 'Commit Message', 'value': commit_msg, 'inline': False})
+              fields.append({'name': 'Author', 'value': author, 'inline': True})
+              fields.append({'name': 'Branch', 'value': ref_name, 'inline': True})
+              fields.append({'name': 'Commit SHA', 'value': f'[{sha[:7]}]({commit_url})', 'inline': False})
+          elif event_name == 'release':
+              release = payload.get('release') or {}
+              release_name = release.get('name') or release.get('tag_name', 'Release')
+              release_url = release.get('html_url', f'https://github.com/{repo}/releases')
+              tag_name = release.get('tag_name', ref_name)
+              
+              title = '🚀 Build Started (Release)'
+              description = 'Docker image build process has started for a new release.'
+              fields.append({'name': 'Release', 'value': f'[{release_name}]({release_url})', 'inline': False})
+              fields.append({'name': 'Tag', 'value': tag_name, 'inline': True})
+          else:
+              title = '🔨 Build Started'
+              description = f'Docker image build process has started ({event_name}).'
+              fields.append({'name': 'Ref', 'value': ref_name, 'inline': True})
+
+          data = {
+              'username': 'GitHub Actions',
+              'avatar_url': 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png',
+              'embeds': [{
+                  'title': title,
+                  'description': description,
+                  'color': 3447003,
+                  'fields': fields
+              }]
+          }
+
+          req = urllib.request.Request(
+              webhook_url,
+              data=json.dumps(data).encode('utf-8'),
+              headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
+          )
+          try:
+              with urllib.request.urlopen(req) as response:
+                  print('Notification sent:', response.status)
+          except Exception as e:
+              print('Failed to send notification:', e)
+          "
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -26,6 +98,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main' || github.event_name == 'release'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -47,6 +120,60 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ github.ref == 'refs/heads/main' || github.event_name == 'release' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Notify success
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 -c "
+          import os, json, urllib.request
+          webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+          if not webhook_url:
+              exit(0)
+          run_url = f'https://github.com/{os.environ.get(\"REPOSITORY\")}/actions/runs/{os.environ.get(\"RUN_ID\")}'
+          data = {
+              'username': 'GitHub Actions',
+              'avatar_url': 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png',
+              'embeds': [{
+                  'title': '✅ Build Success',
+                  'description': 'Docker image built (and pushed if applicable) successfully.',
+                  'color': 3066993,
+                  'fields': [{'name': 'Workflow Run', 'value': f'[View Run Log]({run_url})', 'inline': False}]
+              }]
+          }
+          req = urllib.request.Request(webhook_url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+          urllib.request.urlopen(req)
+          "
+
+      - name: Notify failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 -c "
+          import os, json, urllib.request
+          webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+          if not webhook_url:
+              exit(0)
+          run_url = f'https://github.com/{os.environ.get(\"REPOSITORY\")}/actions/runs/{os.environ.get(\"RUN_ID\")}'
+          data = {
+              'username': 'GitHub Actions',
+              'avatar_url': 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png',
+              'embeds': [{
+                  'title': '❌ Build Failed',
+                  'description': 'Docker image build failed.',
+                  'color': 15158332,
+                  'fields': [{'name': 'Workflow Run', 'value': f'[View Run Log]({run_url})', 'inline': False}]
+              }]
+          }
+          req = urllib.request.Request(webhook_url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+          urllib.request.urlopen(req)
+          "
